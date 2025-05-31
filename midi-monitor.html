@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>MIDI Monitor</title>
+  <style>
+    #log {
+      white-space: pre-wrap;
+      font-family: monospace;
+      border: 1px solid black;
+      padding: 10px;
+      height: 300px;
+      overflow-y: scroll;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h1>MIDI Monitor</h1>
+
+  <button id="captureButton">Capture!</button>
+
+  <div id="log"></div>
+
+  <script>
+    let capturing = false;
+    let midiAccess = null;
+    let logDiv = document.getElementById('log');
+    let captureButton = document.getElementById('captureButton');
+
+    captureButton.addEventListener('click', () => {
+      if (capturing) {
+        stopCapture();
+      } else {
+        startCapture();
+      }
+    });
+
+    function startCapture() {
+      logDiv.innerHTML = "";
+      if (!midiAccess) {
+        navigator.requestMIDIAccess()
+          .then(onMIDISuccess, onMIDIFailure);
+      } else {
+        beginCapture();
+      }
+    }
+
+    function stopCapture() {
+      capturing = false;
+      captureButton.textContent = "Capture!";
+      logDiv.innerHTML = "";
+      if (midiAccess) {
+        console.log('Stopping capture...')
+        for (const input of midiAccess.inputs.values()) {
+          input.onmidimessage = null;
+        }
+      }
+    }
+
+    function onMIDISuccess(access) {
+      midiAccess = access;
+      beginCapture();
+    }
+
+    function onMIDIFailure() {
+      console.log('Could not access your MIDI devices.');
+      midiAccess = undefined;
+    }
+
+    function beginCapture() {
+      capturing = true;
+      captureButton.textContent = "Stop!";
+      let eventCount = 0;
+
+      for (const input of midiAccess.inputs.values()) {
+        let name = input.name;
+        console.log('Capturing MIDI input:', input.name);
+        input.onmidimessage = (event) => {
+          if (eventCount < 1000 && capturing) {
+            const data = event.data;
+
+            if (data.length === 1) {
+              if (data[0] === 0xf8) { return; }  // Clock
+              if (data[0] === 0xfe) { return; }  // Active sensing ?
+            }
+            const hexData = Array.from(data).map(x =>
+              x.toString(16).padStart(2, '0')).join(' ');
+            const message = `[${hexData}] ${name}`;
+
+            const div = document.createElement('div');
+            div.textContent = message;
+            logDiv.appendChild(div);
+            eventCount++;
+          }
+        }
+      }
+    }
+  </script>
+
+</body>
+
+</html>
